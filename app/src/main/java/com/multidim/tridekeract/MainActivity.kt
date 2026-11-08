@@ -164,7 +164,7 @@ class MainActivity : Activity() {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(8), dp(8), dp(8), dp(8)) }
         fun add(v: View, gap: Boolean = true) { row.addView(v, LinearLayout.LayoutParams(-2, -2).apply { if (gap) leftMargin = dp(6) }) }
         playBtn = button("Play") { onPlay() }
-        stopBtn = button("Stop") { onStop() }
+        stopBtn = button("Stop") { stopAllSound() }
         appsBtn = button("Other apps") { onApps() }
         micBtn = button("Microphone") { onMic() }
         val pick = button("Choose a track") { onPick() }
@@ -294,7 +294,7 @@ class MainActivity : Activity() {
         refresh()
     }
 
-    private fun onStop() {
+    private fun stopAllSound() {
         engine.stopTrack(); engine.stopMic(); stopCapture()
         setStatus("Stopped.")
         refresh()
