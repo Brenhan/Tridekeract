@@ -18,13 +18,13 @@ top, because every build is signed with the same key (`keys/debug.keystore`).
   phone allows it.
 
 ## Gestures
-One finger turns the cube; two fingers fold through hidden dimensions (the music also does this
-swipe on its biggest swells); pinch zooms; twist rolls; double-tap resets the view; long-press opens
-the Feel panel (React and Linger).
+One finger turns the cube; two fingers fold through hidden dimensions; pinch zooms; twist rolls; double-tap resets the view; long-press opens
+the Feel panel (React, Linger and Spread — how much each band also opens the dimensions listed
+next to it).
 
 ## Code map
 - `Viz.kt` — the per-frame behavior, ported line for line from the web page (bands, self-adjusting
-  thresholds, whole-mix swell → music swipe, tumble, 13D projection).
+  thresholds, 5% band overlap, Spread, tumble, 13D projection).
 - `Analyser.kt` — a copy of the browser's AnalyserNode (4096-point FFT, Blackman window, smoothing
   0.55, −100…−30 dB → 0…255), so the web tuning carries over unchanged.
 - `Renderer.kt` — OpenGL ES 3 instanced edges, stereo views.

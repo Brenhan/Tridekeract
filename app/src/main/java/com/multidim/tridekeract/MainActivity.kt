@@ -76,6 +76,7 @@ class MainActivity : Activity() {
         viz = Viz(reduced)
         viz.gFast = prefs.getFloat("fast", Viz.GFAST.toFloat()).toDouble()
         viz.gClose = prefs.getFloat("close", Viz.GCLOSE.toFloat()).toDouble()
+        viz.spread = prefs.getFloat("spread", Viz.GSPREAD.toFloat()).toDouble()
 
         engine = AudioEngine(this)
         engine.onFinished = { ui.post { engine.stopTrack(); setStatus("Finished: $trackName. Tap Play to hear it again."); refresh(); showUI() } }
@@ -182,6 +183,7 @@ class MainActivity : Activity() {
     }
 
     private val feelBars = ArrayList<Triple<SeekBar, TextView, () -> Double>>()
+    private var spreadBar: SeekBar? = null
 
     private fun buildFeel(): LinearLayout {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = panelBg(); setPadding(dp(12), dp(10), dp(12), dp(10)) }
@@ -213,11 +215,35 @@ class MainActivity : Activity() {
         }
         box.addView(slider("React", 0.005, 2.0, { viz.gFast }) { viz.gFast = it })
         box.addView(slider("Linger", 0.02, 5.0, { viz.gClose }) { viz.gClose = it })
+        run {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            val name = TextView(this).apply { text = "Spread"; setTextColor(cMuted); textSize = 12f; typeface = Typeface.MONOSPACE }
+            val out = TextView(this).apply { setTextColor(cFg); textSize = 12f; typeface = Typeface.MONOSPACE; gravity = Gravity.END }
+            val bar = SeekBar(this)
+            bar.max = 100
+            bar.progress = (viz.spread * 100).roundToInt()
+            out.text = "${bar.progress}%"
+            bar.contentDescription = "Spread: how much each band also opens its neighbouring dimensions"
+            bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    out.text = "$p%"
+                    if (fromUser) { synchronized(viz) { viz.spread = p / 100.0 }; saveFeel(); showUI() }
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+            spreadBar = bar
+            row.addView(name, LinearLayout.LayoutParams(dp(64), -2))
+            row.addView(bar, LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(out, LinearLayout.LayoutParams(dp(56), -2))
+            box.addView(row)
+        }
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val reset = button("Reset") {
-            synchronized(viz) { viz.gFast = Viz.GFAST; viz.gClose = Viz.GCLOSE }
+            synchronized(viz) { viz.gFast = Viz.GFAST; viz.gClose = Viz.GCLOSE; viz.spread = Viz.GSPREAD }
             saveFeel()
             for ((bar, _, pos) in feelBars) bar.progress = pos().roundToInt()
+            spreadBar?.progress = (Viz.GSPREAD * 100).roundToInt()
         }
         val done = button("Done") { closeFeel() }
         btns.addView(reset, LinearLayout.LayoutParams(0, -2, 1f))
@@ -233,7 +259,7 @@ class MainActivity : Activity() {
         else -> "${t.roundToInt()}s"
     }
 
-    private fun saveFeel() { prefs.edit().putFloat("fast", viz.gFast.toFloat()).putFloat("close", viz.gClose.toFloat()).apply() }
+    private fun saveFeel() { prefs.edit().putFloat("fast", viz.gFast.toFloat()).putFloat("close", viz.gClose.toFloat()).putFloat("spread", viz.spread.toFloat()).apply() }
     private fun openFeel() { feel.visibility = View.VISIBLE; glView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showUI() }
     private fun closeFeel() { feel.visibility = View.GONE; showUI() }
 

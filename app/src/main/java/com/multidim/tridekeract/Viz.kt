@@ -14,8 +14,8 @@ import kotlin.math.sqrt
 
 /**
  * Everything the Tridekeract does each frame, ported line for line from the web page:
- * 13 frequency bands each open one fold of the 13-cube; the whole-mix swell drives the
- * two-finger swipe; the visible cube tumbles with the volume; hidden axes are projected away.
+ * 13 overlapping frequency bands each open one fold of the 13-cube, and a share (Spread) of
+ * the folds listed next to theirs; the visible cube tumbles with the volume; hidden axes are projected away.
  * All public state is guarded by `synchronized(this)` — touch input comes from the UI thread.
  */
 class Viz(private val reducedMotion: Boolean) {
@@ -33,14 +33,8 @@ class Viz(private val reducedMotion: Boolean) {
         const val DUTY = 0.14
         const val ADAPT = 0.6
         const val CAP = 0.027
-        // Whole-mix swell → the music's two-finger swipe
-        const val RISE_NOW = 0.3
-        const val RISE_NORMAL = 8.0
-        const val SWELL_FULL = 1.5
-        const val SWELL_ADAPT = 0.2
-        const val SWELL_RELAX = 240.0
-        const val PUSH_START = 0.5
-        const val PUSH_GAIN = 5.0
+        const val OVERLAP = 0.1 // each band reaches 5% of its width into each neighbour
+        const val GSPREAD = 0.65
         val TWDEF = doubleArrayOf(0.21, 0.29, 0.479, 0.95, 1.56, 2.52, 4.0, 7.269, 17.928, 60.0, 60.0, 60.0, 60.0)
         val BASE = doubleArrayOf(0.8, 0.5, 0.35)
         const val GFAST = 0.29
@@ -60,6 +54,8 @@ class Viz(private val reducedMotion: Boolean) {
     // Timings: the two the Feel panel changes, plus the baked ones.
     var gFast = GFAST
     var gClose = GCLOSE
+    /** How much each band also opens the dimensions listed next to it (0..1). */
+    var spread = GSPREAD
     private val gSlow = 3.4
     private val gPeak = 0.36
     private val gOpen = 0.13
@@ -85,9 +81,6 @@ class Viz(private val reducedMotion: Boolean) {
     private var vol = 0.0
     private var volPeak = 0.02
     private var warmT = 99.0
-    private var sNow = 0.0
-    private var sNorm = 0.0
-    private var sFull = SWELL_FULL
 
     // View
     var ax = 0.35; var ay = 0.5; var roll = 0.0; var zoom = 1.0
@@ -114,12 +107,13 @@ class Viz(private val reducedMotion: Boolean) {
         var acc = 0.0
         for (a in 0 until n) {
             val lo = acc; val hi = acc + w[a] / tot; acc = hi
-            bands[a][0] = exp(l0 + lo * span)
-            bands[a][1] = exp(l0 + min(1.0, hi) * span)
+            val pad = (hi - lo) * OVERLAP / 2
+            bands[a][0] = exp(l0 + max(0.0, lo - pad) * span)
+            bands[a][1] = exp(l0 + min(1.0, hi + pad) * span)
         }
     }
 
-    fun resetWarm() { warmT = 0.0; sFull = SWELL_FULL }
+    fun resetWarm() { warmT = 0.0 }
 
     /** Per-band chain (Now / Normal / change / peak memory / self-adjust), as on the page. */
     fun readBands(dt: Double, live: Boolean, an: Analyser, end: Long) {
@@ -158,33 +152,12 @@ class Viz(private val reducedMotion: Boolean) {
         }
     }
 
-    /** The music does the two-finger swipe, driven by the whole mix's swell. */
-    private fun listenWhole(dt: Double, live: Boolean) {
-        if (!live) return
-        sNow += (lastRms - sNow) * (1 - exp(-dt / min(RISE_NOW, warmT + dt)))
-        sNorm += (lastRms - sNorm) * (1 - exp(-dt / min(RISE_NORMAL, warmT + dt)))
-        val sw = if (warmT > RISE_NORMAL) (sNow / max(sNorm, 1e-4) - 1) / (sFull - 1) else 0.0
-        val push = max(0.0, (sw - PUSH_START) / (1 - PUSH_START)) * PUSH_GAIN
-        var lo = 0.0; var hi = 0.0
-        for (i in 0 until HB) if (i < 6) lo += level[i] / 6 else hi += level[i] / (HB - 6)
-        val bal = (lo - hi) / (lo + hi + 1e-6)
-        val dx = push * (0.6 + 0.4 * bal)
-        val dy = push * (0.6 - 0.4 * bal)
-        if (push > 0) for (i in 0 until HB) {
-            manual[i] = max(-2.5, min(2.5, manual[i] + (if (i % 2 == 1) dx else dy) * (if (i % 3 == 0) -1 else 1) * dt))
-        }
-        var all = 1.0
-        for (k in 3 until DIM) if (hOpen[k] < 0.5) { all = 0.0; break }
-        sFull += dt * (SWELL_ADAPT * all - (sFull - SWELL_FULL) / SWELL_RELAX)
-    }
-
     fun foldBy(dx: Double, dy: Double) {
         for (i in 0 until HB) manual[i] = max(-2.5, min(2.5, manual[i] + (if (i % 2 == 1) dx else dy) * 0.012 * (if (i % 3 == 0) -1 else 1)))
     }
 
     /** Everything after the analyser for one frame. */
     fun step(dt: Double, live: Boolean) {
-        listenWhole(dt, live)
         if (live) {
             fastE += (lastRms - fastE) * (1 - exp(-dt / 0.12))
             slowE += (lastRms - slowE) * (1 - exp(-dt / 4))
@@ -199,7 +172,9 @@ class Viz(private val reducedMotion: Boolean) {
         val spin = if (live) SPIN_MAX * vol.pow(1.6) + whip else SPIN_IDLE
         for (a in 0 until 3) theta[a] += dt * 0.7 * PACE * spin * BASE[a]
         for (i in 0 until HB) {
-            val tgt = if (live) level[i] else 0.0
+            // Spread: each band also opens the dimensions listed next to it (bands i-1 and i+1).
+            val nb = max(if (i > 0) level[i - 1] else 0.0, if (i < HB - 1) level[i + 1] else 0.0)
+            val tgt = if (live) max(level[i], spread * nb) else 0.0
             if (openAmt[i] < 0.02 && tgt > 0.1) sgn[i] = -sgn[i]
             openAmt[i] += (tgt - openAmt[i]) * (1 - exp(-dt / (if (tgt > openAmt[i]) gOpen else gClose)))
             if (fingers == 0) manual[i] *= exp(-dt * 1.2)
