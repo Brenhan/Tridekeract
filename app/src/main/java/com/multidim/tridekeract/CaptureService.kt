@@ -86,7 +86,7 @@ class CaptureService : Service() {
         val stopPi = PendingIntent.getService(this, 1, Intent(this, CaptureService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE)
         val n = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Tridekeract is listening")
+            .setContentTitle("Pentadekeract is listening")
             .setContentText("The cube is moving to the sound from your other apps.")
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(null, "Stop", stopPi).build())

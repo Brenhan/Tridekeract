@@ -38,8 +38,8 @@ class Renderer(private val viz: Viz, private val density: Float) : GLSurfaceView
     private var count = 0
     private var key = ""
     private var wPx = 1; private var hPx = 1
-    private val posBuf: FloatBuffer = ByteBuffer.allocateDirect(128 * 64 * 4 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
-    private val posArr = FloatArray(128 * 64 * 4)
+    private val posBuf: FloatBuffer = ByteBuffer.allocateDirect(256 * 128 * 4 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
+    private val posArr = FloatArray(256 * 128 * 4)
     private val widths = FloatArray(16)
     private val colors = FloatArray(64)
     private val rot = FloatArray(9)
@@ -55,7 +55,7 @@ uniform highp sampler2D pos;
 uniform mat3 R;uniform vec2 eye;uniform vec2 center;uniform float k;uniform vec2 res;
 uniform float widths[16];uniform vec4 colors[16];
 flat out vec4 vcol;
-vec3 fetchP(uint i){return texelFetch(pos,ivec2(int(i%128u),int(i/128u)),0).xyz;}
+vec3 fetchP(uint i){return texelFetch(pos,ivec2(int(i%256u),int(i/256u)),0).xyz;}
 vec2 proj(vec3 p){vec3 q=R*p;float x3=q.x*eye.x-q.z*eye.y;float z3=q.x*eye.y+q.z*eye.x;float f=4.0/(4.0-z3);return vec2(center.x+x3*k*f,center.y-q.y*k*f);}
 void main(){
   vec2 A=proj(fetchP(inst.x)),B=proj(fetchP(inst.y));vec2 d=B-A;float L=length(d);
@@ -116,7 +116,7 @@ precision mediump float;flat in vec4 vcol;out vec4 o;void main(){o=vec4(vcol.rgb
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_NEAREST)
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
-        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA32F, 128, 64, 0, GLES30.GL_RGBA, GLES30.GL_FLOAT, null)
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA32F, 256, 128, 0, GLES30.GL_RGBA, GLES30.GL_FLOAT, null)
         key = ""
         last = SystemClock.elapsedRealtimeNanos()
     }
@@ -193,7 +193,7 @@ precision mediump float;flat in vec4 vcol;out vec4 o;void main(){o=vec4(vcol.rgb
         posBuf.position(0); posBuf.put(posArr, 0, n * 4); posBuf.position(0)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex)
-        GLES30.glTexSubImage2D(GLES30.GL_TEXTURE_2D, 0, 0, 0, 128, (n + 127) / 128, GLES30.GL_RGBA, GLES30.GL_FLOAT, posBuf)
+        GLES30.glTexSubImage2D(GLES30.GL_TEXTURE_2D, 0, 0, 0, 256, (n + 255) / 256, GLES30.GL_RGBA, GLES30.GL_FLOAT, posBuf)
 
         GLES30.glEnable(GLES30.GL_BLEND)
         GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE_MINUS_SRC_ALPHA)

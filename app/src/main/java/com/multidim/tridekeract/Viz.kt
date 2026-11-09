@@ -13,16 +13,16 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Everything the Tridekeract does each frame, ported line for line from the web page:
- * 13 overlapping frequency bands each open one fold of the 13-cube, and a share (Spread) of
+ * Everything the Pentadekeract (15-cube) does each frame, ported line for line from the web page:
+ * 15 overlapping frequency bands each open one fold of the 15-cube, and a share (Spread) of
  * the folds listed next to theirs; the visible cube tumbles with the volume; hidden axes are projected away.
  * All public state is guarded by `synchronized(this)` — touch input comes from the UI thread.
  */
 class Viz(private val reducedMotion: Boolean) {
     companion object {
         const val MAX = 16
-        const val HB = 13
-        const val DIM = 13
+        const val HB = 15
+        const val DIM = 15
         const val OPEN_MAX = 1.2
         const val FLOOR = 0.035
         const val HD = 5.0
@@ -34,8 +34,8 @@ class Viz(private val reducedMotion: Boolean) {
         const val ADAPT = 0.6
         const val CAP = 0.027
         const val OVERLAP = 0.1 // each band reaches 5% of its width into each neighbour
-        const val GSPREAD = 0.65
-        val TWDEF = doubleArrayOf(0.21, 0.29, 0.479, 0.95, 1.56, 2.52, 4.0, 7.269, 17.928, 60.0, 60.0, 60.0, 60.0)
+        const val GSPREAD = 0.8
+        val TWDEF = doubleArrayOf(0.21, 0.277, 0.394, 0.708, 1.175, 1.798, 2.692, 4.0, 6.675, 12.695, 35.753, 60.0, 60.0, 60.0, 60.0)
         val BASE = doubleArrayOf(0.8, 0.5, 0.35)
         const val GFAST = 0.29
         const val GCLOSE = 0.15
@@ -48,8 +48,9 @@ class Viz(private val reducedMotion: Boolean) {
     private val WHIP_DECAY = 2.4
     private val WHIP_COOLDOWN = 2.5
 
-    val planeV = IntArray(HB) { it % 3 }
-    val planeH = IntArray(HB) { 3 + (it % 10) }
+    // Band i tilts visible axis planeV into hidden axis planeH; bands 12–14 reuse hidden axes 3–5 with a different visible axis.
+    val planeV = IntArray(HB) { (it + it / (DIM - 3)) % 3 }
+    val planeH = IntArray(HB) { 3 + (it % (DIM - 3)) }
 
     // Timings: the two the Feel panel changes, plus the baked ones.
     var gFast = GFAST

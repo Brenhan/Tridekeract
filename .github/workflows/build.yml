@@ -22,16 +22,16 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           gradle --no-daemon --stacktrace assembleDebug
       - name: Name the APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk Tridekeract-${{ github.run_number }}.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk Pentadekeract-${{ github.run_number }}.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Tridekeract-${{ github.run_number }}
-          path: Tridekeract-${{ github.run_number }}.apk
+          name: Pentadekeract-${{ github.run_number }}
+          path: Pentadekeract-${{ github.run_number }}.apk
       - name: Publish as a release (download this on the phone)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Tridekeract build ${{ github.run_number }}
-          body: Install Tridekeract-${{ github.run_number }}.apk on your Android phone.
-          files: Tridekeract-${{ github.run_number }}.apk
+          name: Pentadekeract build ${{ github.run_number }}
+          body: Install Pentadekeract-${{ github.run_number }}.apk on your Android phone.
+          files: Pentadekeract-${{ github.run_number }}.apk
           make_latest: true

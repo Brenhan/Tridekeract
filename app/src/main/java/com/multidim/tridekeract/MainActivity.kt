@@ -103,7 +103,7 @@ class MainActivity : Activity() {
             setEGLConfigChooser(MsaaChooser())
             setRenderer(renderer)
             renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
-            contentDescription = "Thirteen-dimensional cube moving with the music. Drag to turn, two fingers to fold through hidden dimensions, pinch to zoom, double-tap to reset, long-press for feel settings."
+            contentDescription = "Fifteen-dimensional cube moving with the music. Drag to turn, two fingers to fold through hidden dimensions, pinch to zoom, double-tap to reset, long-press for feel settings."
             setOnTouchListener { _, e -> onTouch(e); true }
         }
 
