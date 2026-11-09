@@ -74,9 +74,8 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val reduced = Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
         viz = Viz(reduced)
-        val oldSpread = prefs.getFloat("spread", Viz.GSPREAD.toFloat())
-        viz.spreadUp = prefs.getFloat("spreadUp", oldSpread).toDouble()
-        viz.spreadDown = prefs.getFloat("spreadDown", oldSpread).toDouble()
+        viz.spread = prefs.getFloat("spread", Viz.GSPREAD.toFloat()).toDouble()
+        viz.overlap = prefs.getFloat("overlap", Viz.GOVERLAP.toFloat()).toDouble().coerceIn(0.0, 0.5)
         viz.gFast = prefs.getFloat("fast", Viz.GFAST.toFloat()).toDouble().coerceIn(0.0, 3.0)
         viz.gClose = prefs.getFloat("close", Viz.GCLOSE.toFloat()).toDouble().coerceIn(0.0, 1.0)
 
@@ -220,11 +219,11 @@ class MainActivity : Activity() {
         // Times are in 0.005 s steps; 0 means instant.
         box.addView(slider("React", 3.0, 600, ::fmt, "React: how long each band's now is averaged over", { viz.gFast }) { viz.gFast = it })
         box.addView(slider("Linger", 1.0, 200, ::fmt, "Linger: how long an opening takes to fold back", { viz.gClose }) { viz.gClose = it })
-        box.addView(slider("Spread up", 1.0, 100, pct, "Spread up: how much each band also opens the dimension listed after it", { viz.spreadUp }) { viz.spreadUp = it })
-        box.addView(slider("Spread down", 1.0, 100, pct, "Spread down: how much each band also opens the dimension listed before it", { viz.spreadDown }) { viz.spreadDown = it })
+        box.addView(slider("Overlap", 0.5, 50, pct, "Overlap: how far each band reaches into each neighbouring band, as a share of its own width", { viz.overlap }) { viz.overlap = it })
+        box.addView(slider("Spread", 1.0, 100, pct, "Spread: how much each band also opens the dimensions listed next to it", { viz.spread }) { viz.spread = it })
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val reset = button("Reset") {
-            synchronized(viz) { viz.spreadUp = Viz.GSPREAD; viz.spreadDown = Viz.GSPREAD; viz.gFast = Viz.GFAST; viz.gClose = Viz.GCLOSE }
+            synchronized(viz) { viz.spread = Viz.GSPREAD; viz.overlap = Viz.GOVERLAP; viz.gFast = Viz.GFAST; viz.gClose = Viz.GCLOSE }
             saveFeel()
             for ((bar, pos) in feelBars) bar.progress = pos()
         }
@@ -243,7 +242,7 @@ class MainActivity : Activity() {
         else -> "${t.roundToInt()}s"
     }
 
-    private fun saveFeel() { prefs.edit().putFloat("fast", viz.gFast.toFloat()).putFloat("close", viz.gClose.toFloat()).putFloat("spreadUp", viz.spreadUp.toFloat()).putFloat("spreadDown", viz.spreadDown.toFloat()).apply() }
+    private fun saveFeel() { prefs.edit().putFloat("fast", viz.gFast.toFloat()).putFloat("close", viz.gClose.toFloat()).putFloat("spread", viz.spread.toFloat()).putFloat("overlap", viz.overlap.toFloat()).apply() }
     private fun openFeel() { feel.visibility = View.VISIBLE; glView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showUI() }
     private fun closeFeel() { feel.visibility = View.GONE; showUI() }
 

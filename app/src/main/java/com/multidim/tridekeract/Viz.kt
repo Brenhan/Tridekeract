@@ -33,7 +33,7 @@ class Viz(private val reducedMotion: Boolean) {
         const val DUTY = 0.14
         const val ADAPT = 0.6
         const val CAP = 0.027
-        const val OVERLAP = 0.1 // each band reaches 5% of its width into each neighbour
+        const val GOVERLAP = 0.05
         const val GSPREAD = 0.8
         const val GFAST = 0.005
         const val GCLOSE = 0.02
@@ -54,10 +54,11 @@ class Viz(private val reducedMotion: Boolean) {
 
     // Timings: the two the Feel panel changes, plus the baked ones.
     /** How much each band also opens the dimensions listed next to it (0..1). */
-    /** Spread up: how much each band also opens the dimension listed after it (band i+1). */
-    var spreadUp = GSPREAD
-    /** Spread down: how much each band also opens the dimension listed before it (band i-1). */
-    var spreadDown = GSPREAD
+    /** How much each band also opens the dimensions listed next to it (0..1). */
+    var spread = GSPREAD
+    /** How far each band reaches into each neighbouring band, as a share of its own width (0..0.5). */
+    var overlap = GOVERLAP
+        set(v) { field = v; bandsFor = -1 }
     /** React: how long each band's "now" is averaged over (0 = its live level). */
     var gFast = GFAST
     /** Linger: how long an opening takes to fold back (0 = instantly). */
@@ -113,7 +114,7 @@ class Viz(private val reducedMotion: Boolean) {
         var acc = 0.0
         for (a in 0 until n) {
             val lo = acc; val hi = acc + w[a] / tot; acc = hi
-            val pad = (hi - lo) * OVERLAP / 2
+            val pad = (hi - lo) * overlap
             bands[a][0] = exp(l0 + max(0.0, lo - pad) * span)
             bands[a][1] = exp(l0 + min(1.0, hi + pad) * span)
         }
@@ -178,10 +179,9 @@ class Viz(private val reducedMotion: Boolean) {
         val spin = if (live) SPIN_MAX * vol.pow(1.6) + whip else SPIN_IDLE
         for (a in 0 until 3) theta[a] += dt * 0.7 * PACE * spin * BASE[a]
         for (i in 0 until HB) {
-            // Spread: the band below opens this dimension by Spread up, the band above by Spread down.
-            val fromBelow = if (i > 0) spreadUp * level[i - 1] else 0.0
-            val fromAbove = if (i < HB - 1) spreadDown * level[i + 1] else 0.0
-            val tgt = if (live) max(level[i], max(fromBelow, fromAbove)) else 0.0
+            // Spread: each band also opens the dimensions listed next to it (bands i-1 and i+1).
+            val nb = max(if (i > 0) level[i - 1] else 0.0, if (i < HB - 1) level[i + 1] else 0.0)
+            val tgt = if (live) max(level[i], spread * nb) else 0.0
             if (openAmt[i] < 0.02 && tgt > 0.1) sgn[i] = -sgn[i]
             openAmt[i] += (tgt - openAmt[i]) * (1 - exp(-dt / (if (tgt > openAmt[i]) gOpen else gClose)))
             if (fingers == 0) manual[i] *= exp(-dt * 1.2)
