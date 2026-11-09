@@ -27,7 +27,7 @@ class Viz(private val reducedMotion: Boolean) {
         const val FLOOR = 0.035
         const val HD = 5.0
         const val PACE = 0.5
-        const val LO = 40.0
+        const val LO = 20.0
         const val HI = 14000.0
         const val LOW_WIDEN = 0.45
         const val DUTY = 0.14
