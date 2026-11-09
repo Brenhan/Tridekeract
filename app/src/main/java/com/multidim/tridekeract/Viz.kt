@@ -81,6 +81,8 @@ class Viz(private val reducedMotion: Boolean) {
     private val TW = DoubleArray(MAX) { if (it < TWDEF.size) TWDEF[it] else 12.0 }
 
     private var lastRms = 0.0
+    /** Raw loudness of the latest analysis window (for the meters). */
+    val loudness get() = lastRms
     private var fastE = 0.0
     private var slowE = 0.0
     private var whip = 0.0

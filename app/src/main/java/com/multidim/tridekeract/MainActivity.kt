@@ -221,6 +221,7 @@ class MainActivity : Activity() {
         box.addView(slider("Linger", 1.0, 200, ::fmt, "Linger: how long an opening takes to fold back", { viz.gClose }) { viz.gClose = it })
         box.addView(slider("Overlap", 0.5, 50, pct, "Overlap: how far each band reaches into each neighbouring band, as a share of its own width", { viz.overlap }) { viz.overlap = it })
         box.addView(slider("Spread", 1.0, 100, pct, "Spread: how much each band also opens the dimensions listed next to it", { viz.spread }) { viz.spread = it })
+        box.addView(MeterView(this, viz, cFg, cMuted, cAccent), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val reset = button("Reset") {
             synchronized(viz) { viz.spread = Viz.GSPREAD; viz.overlap = Viz.GOVERLAP; viz.gFast = Viz.GFAST; viz.gClose = Viz.GCLOSE }
