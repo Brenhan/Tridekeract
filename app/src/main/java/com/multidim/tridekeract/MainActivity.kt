@@ -74,8 +74,10 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val reduced = Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
         viz = Viz(reduced)
-        viz.spread = prefs.getFloat("spread", Viz.GSPREAD.toFloat()).toDouble()
-        viz.gFast = prefs.getFloat("fast", Viz.GFAST.toFloat()).toDouble().coerceIn(0.0, 1.0)
+        val oldSpread = prefs.getFloat("spread", Viz.GSPREAD.toFloat())
+        viz.spreadUp = prefs.getFloat("spreadUp", oldSpread).toDouble()
+        viz.spreadDown = prefs.getFloat("spreadDown", oldSpread).toDouble()
+        viz.gFast = prefs.getFloat("fast", Viz.GFAST.toFloat()).toDouble().coerceIn(0.0, 3.0)
         viz.gClose = prefs.getFloat("close", Viz.GCLOSE.toFloat()).toDouble().coerceIn(0.0, 1.0)
 
         engine = AudioEngine(this)
@@ -120,7 +122,7 @@ class MainActivity : Activity() {
 
         root.addView(buildDock(), FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(12) })
         feel = buildFeel()
-        root.addView(feel, FrameLayout.LayoutParams(dp(300), -2, Gravity.TOP or Gravity.END).apply { topMargin = dp(10); rightMargin = dp(12) })
+        root.addView(feel, FrameLayout.LayoutParams(dp(330), -2, Gravity.TOP or Gravity.END).apply { topMargin = dp(10); rightMargin = dp(12) })
         feel.visibility = View.GONE
 
         setContentView(root)
@@ -182,68 +184,49 @@ class MainActivity : Activity() {
         return scroll
     }
 
-    private val feelBars = ArrayList<Triple<SeekBar, TextView, () -> Double>>()
-    private var spreadBar: SeekBar? = null
+    private val feelBars = ArrayList<Pair<SeekBar, () -> Int>>()
 
     private fun buildFeel(): LinearLayout {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = panelBg(); setPadding(dp(12), dp(10), dp(12), dp(10)) }
         box.addView(TextView(this).apply { text = "Feel"; setTextColor(cFg); textSize = 13f; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) })
         box.setOnTouchListener { _, _ -> showUI(); true }
-        // Linear 0–1 s in 0.005 s steps; 0 means instant.
-        fun slider(label: String, get: () -> Double, set: (Double) -> Unit): View {
+        /** A linear slider from 0 to [top] in [steps] steps. */
+        fun slider(label: String, top: Double, steps: Int, show: (Double) -> String, describe: String,
+                   get: () -> Double, set: (Double) -> Unit): View {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             val name = TextView(this).apply { text = label; setTextColor(cMuted); textSize = 12f; typeface = Typeface.MONOSPACE }
             val out = TextView(this).apply { setTextColor(cFg); textSize = 12f; typeface = Typeface.MONOSPACE; gravity = Gravity.END }
             val bar = SeekBar(this)
-            bar.max = 200
-            bar.progress = (get() * 200).roundToInt()
-            out.text = fmt(get())
-            bar.contentDescription = label
+            bar.max = steps
+            val pos = { (get() / top * steps).roundToInt().coerceIn(0, steps) }
+            bar.progress = pos()
+            out.text = show(get())
+            bar.contentDescription = describe
             bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    val t = p / 200.0; out.text = fmt(t)
+                    val t = p * top / steps; out.text = show(t)
                     if (fromUser) { synchronized(viz) { set(t) }; saveFeel(); showUI() }
                 }
                 override fun onStartTrackingTouch(s: SeekBar?) {}
                 override fun onStopTrackingTouch(s: SeekBar?) {}
             })
-            feelBars.add(Triple(bar, out, { get() * 200 }))
-            row.addView(name, LinearLayout.LayoutParams(dp(64), -2))
+            feelBars.add(bar to pos)
+            row.addView(name, LinearLayout.LayoutParams(dp(84), -2))
             row.addView(bar, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(out, LinearLayout.LayoutParams(dp(56), -2))
             return row
         }
-        box.addView(slider("React", { viz.gFast }) { viz.gFast = it })
-        box.addView(slider("Linger", { viz.gClose }) { viz.gClose = it })
-        run {
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            val name = TextView(this).apply { text = "Spread"; setTextColor(cMuted); textSize = 12f; typeface = Typeface.MONOSPACE }
-            val out = TextView(this).apply { setTextColor(cFg); textSize = 12f; typeface = Typeface.MONOSPACE; gravity = Gravity.END }
-            val bar = SeekBar(this)
-            bar.max = 100
-            bar.progress = (viz.spread * 100).roundToInt()
-            out.text = "${bar.progress}%"
-            bar.contentDescription = "Spread: how much each band also opens its neighbouring dimensions"
-            bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    out.text = "$p%"
-                    if (fromUser) { synchronized(viz) { viz.spread = p / 100.0 }; saveFeel(); showUI() }
-                }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-            spreadBar = bar
-            row.addView(name, LinearLayout.LayoutParams(dp(64), -2))
-            row.addView(bar, LinearLayout.LayoutParams(0, -2, 1f))
-            row.addView(out, LinearLayout.LayoutParams(dp(56), -2))
-            box.addView(row)
-        }
+        val pct = { t: Double -> "${(t * 100).roundToInt()}%" }
+        // Times are in 0.005 s steps; 0 means instant.
+        box.addView(slider("React", 3.0, 600, ::fmt, "React: how long each band's now is averaged over", { viz.gFast }) { viz.gFast = it })
+        box.addView(slider("Linger", 1.0, 200, ::fmt, "Linger: how long an opening takes to fold back", { viz.gClose }) { viz.gClose = it })
+        box.addView(slider("Spread up", 1.0, 100, pct, "Spread up: how much each band also opens the dimension listed after it", { viz.spreadUp }) { viz.spreadUp = it })
+        box.addView(slider("Spread down", 1.0, 100, pct, "Spread down: how much each band also opens the dimension listed before it", { viz.spreadDown }) { viz.spreadDown = it })
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val reset = button("Reset") {
-            synchronized(viz) { viz.spread = Viz.GSPREAD; viz.gFast = Viz.GFAST; viz.gClose = Viz.GCLOSE }
+            synchronized(viz) { viz.spreadUp = Viz.GSPREAD; viz.spreadDown = Viz.GSPREAD; viz.gFast = Viz.GFAST; viz.gClose = Viz.GCLOSE }
             saveFeel()
-            for ((bar, _, pos) in feelBars) bar.progress = pos().roundToInt()
-            spreadBar?.progress = (Viz.GSPREAD * 100).roundToInt()
+            for ((bar, pos) in feelBars) bar.progress = pos()
         }
         val done = button("Done") { closeFeel() }
         btns.addView(reset, LinearLayout.LayoutParams(0, -2, 1f))
@@ -260,7 +243,7 @@ class MainActivity : Activity() {
         else -> "${t.roundToInt()}s"
     }
 
-    private fun saveFeel() { prefs.edit().putFloat("fast", viz.gFast.toFloat()).putFloat("close", viz.gClose.toFloat()).putFloat("spread", viz.spread.toFloat()).apply() }
+    private fun saveFeel() { prefs.edit().putFloat("fast", viz.gFast.toFloat()).putFloat("close", viz.gClose.toFloat()).putFloat("spreadUp", viz.spreadUp.toFloat()).putFloat("spreadDown", viz.spreadDown.toFloat()).apply() }
     private fun openFeel() { feel.visibility = View.VISIBLE; glView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showUI() }
     private fun closeFeel() { feel.visibility = View.GONE; showUI() }
 

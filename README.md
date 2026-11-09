@@ -19,8 +19,8 @@ top, because every build is signed with the same key (`keys/debug.keystore`).
 
 ## Gestures
 One finger turns the cube; two fingers fold through hidden dimensions; pinch zooms; twist rolls; double-tap resets the view; long-press opens
-the Feel panel: React and Linger (0–1 s; 0 = instant) and Spread (how much each band also opens
-the dimensions listed next to it).
+the Feel panel: React (0–3 s) and Linger (0–1 s), 0 = instant; Spread up and Spread down (how
+much each band also opens the dimension listed after / before it).
 
 ## Code map
 - `Viz.kt` — the per-frame behavior, ported line for line from the web page (bands, self-adjusting

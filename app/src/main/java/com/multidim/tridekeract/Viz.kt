@@ -54,7 +54,10 @@ class Viz(private val reducedMotion: Boolean) {
 
     // Timings: the two the Feel panel changes, plus the baked ones.
     /** How much each band also opens the dimensions listed next to it (0..1). */
-    var spread = GSPREAD
+    /** Spread up: how much each band also opens the dimension listed after it (band i+1). */
+    var spreadUp = GSPREAD
+    /** Spread down: how much each band also opens the dimension listed before it (band i-1). */
+    var spreadDown = GSPREAD
     /** React: how long each band's "now" is averaged over (0 = its live level). */
     var gFast = GFAST
     /** Linger: how long an opening takes to fold back (0 = instantly). */
@@ -175,9 +178,10 @@ class Viz(private val reducedMotion: Boolean) {
         val spin = if (live) SPIN_MAX * vol.pow(1.6) + whip else SPIN_IDLE
         for (a in 0 until 3) theta[a] += dt * 0.7 * PACE * spin * BASE[a]
         for (i in 0 until HB) {
-            // Spread: each band also opens the dimensions listed next to it (bands i-1 and i+1).
-            val nb = max(if (i > 0) level[i - 1] else 0.0, if (i < HB - 1) level[i + 1] else 0.0)
-            val tgt = if (live) max(level[i], spread * nb) else 0.0
+            // Spread: the band below opens this dimension by Spread up, the band above by Spread down.
+            val fromBelow = if (i > 0) spreadUp * level[i - 1] else 0.0
+            val fromAbove = if (i < HB - 1) spreadDown * level[i + 1] else 0.0
+            val tgt = if (live) max(level[i], max(fromBelow, fromAbove)) else 0.0
             if (openAmt[i] < 0.02 && tgt > 0.1) sgn[i] = -sgn[i]
             openAmt[i] += (tgt - openAmt[i]) * (1 - exp(-dt / (if (tgt > openAmt[i]) gOpen else gClose)))
             if (fingers == 0) manual[i] *= exp(-dt * 1.2)
