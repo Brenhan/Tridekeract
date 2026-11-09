@@ -37,8 +37,6 @@ class Viz(private val reducedMotion: Boolean) {
         const val GSPREAD = 0.8
         val TWDEF = doubleArrayOf(0.21, 0.277, 0.394, 0.708, 1.175, 1.798, 2.692, 4.0, 6.675, 12.695, 35.753, 60.0, 60.0, 60.0, 60.0)
         val BASE = doubleArrayOf(0.8, 0.5, 0.35)
-        const val GFAST = 0.29
-        const val GCLOSE = 0.15
     }
 
     private val SPIN_MAX = if (reducedMotion) 1.5 else 9.0
@@ -53,8 +51,6 @@ class Viz(private val reducedMotion: Boolean) {
     val planeH = IntArray(HB) { 3 + (it % (DIM - 3)) }
 
     // Timings: the two the Feel panel changes, plus the baked ones.
-    var gFast = GFAST
-    var gClose = GCLOSE
     /** How much each band also opens the dimensions listed next to it (0..1). */
     var spread = GSPREAD
     private val gSlow = 3.4
@@ -141,7 +137,7 @@ class Viz(private val reducedMotion: Boolean) {
             var i = i0
             while (i < i1 && i < n) { s += an.bytes[i]; i++ }
             val v = s / ((i1 - i0) * 255.0)
-            bFast[k] += (v - bFast[k]) * (1 - exp(-dt / min(gFast, warmT + dt)))
+            bFast[k] = v // Now = the band's live level (no React smoothing)
             bSlow[k] += (v - bSlow[k]) * (1 - exp(-dt / min(gSlow, warmT + dt)))
             var change = max(0.0, bFast[k] - bSlow[k] * (1 + bThr[k]))
             val gate = max(0.0, min(1.0, (max(v, bSlow[k]) - FLOOR * 0.5) / (FLOOR * 0.5)))
@@ -177,7 +173,8 @@ class Viz(private val reducedMotion: Boolean) {
             val nb = max(if (i > 0) level[i - 1] else 0.0, if (i < HB - 1) level[i + 1] else 0.0)
             val tgt = if (live) max(level[i], spread * nb) else 0.0
             if (openAmt[i] < 0.02 && tgt > 0.1) sgn[i] = -sgn[i]
-            openAmt[i] += (tgt - openAmt[i]) * (1 - exp(-dt / (if (tgt > openAmt[i]) gOpen else gClose)))
+            // Opens with the Open timing; folds back the instant its band drops (no Linger).
+            openAmt[i] = if (tgt > openAmt[i]) openAmt[i] + (tgt - openAmt[i]) * (1 - exp(-dt / gOpen)) else tgt
             if (fingers == 0) manual[i] *= exp(-dt * 1.2)
         }
         if (fingers == 0) {

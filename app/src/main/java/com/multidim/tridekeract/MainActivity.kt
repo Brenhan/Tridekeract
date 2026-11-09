@@ -74,8 +74,6 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val reduced = Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
         viz = Viz(reduced)
-        viz.gFast = prefs.getFloat("fast", Viz.GFAST.toFloat()).toDouble()
-        viz.gClose = prefs.getFloat("close", Viz.GCLOSE.toFloat()).toDouble()
         viz.spread = prefs.getFloat("spread", Viz.GSPREAD.toFloat()).toDouble()
 
         engine = AudioEngine(this)
@@ -213,8 +211,6 @@ class MainActivity : Activity() {
             row.addView(out, LinearLayout.LayoutParams(dp(56), -2))
             return row
         }
-        box.addView(slider("React", 0.005, 2.0, { viz.gFast }) { viz.gFast = it })
-        box.addView(slider("Linger", 0.02, 5.0, { viz.gClose }) { viz.gClose = it })
         run {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             val name = TextView(this).apply { text = "Spread"; setTextColor(cMuted); textSize = 12f; typeface = Typeface.MONOSPACE }
@@ -240,7 +236,7 @@ class MainActivity : Activity() {
         }
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val reset = button("Reset") {
-            synchronized(viz) { viz.gFast = Viz.GFAST; viz.gClose = Viz.GCLOSE; viz.spread = Viz.GSPREAD }
+            synchronized(viz) { viz.spread = Viz.GSPREAD }
             saveFeel()
             for ((bar, _, pos) in feelBars) bar.progress = pos().roundToInt()
             spreadBar?.progress = (Viz.GSPREAD * 100).roundToInt()
@@ -259,7 +255,7 @@ class MainActivity : Activity() {
         else -> "${t.roundToInt()}s"
     }
 
-    private fun saveFeel() { prefs.edit().putFloat("fast", viz.gFast.toFloat()).putFloat("close", viz.gClose.toFloat()).putFloat("spread", viz.spread.toFloat()).apply() }
+    private fun saveFeel() { prefs.edit().putFloat("spread", viz.spread.toFloat()).apply() }
     private fun openFeel() { feel.visibility = View.VISIBLE; glView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showUI() }
     private fun closeFeel() { feel.visibility = View.GONE; showUI() }
 
