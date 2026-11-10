@@ -74,8 +74,10 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val reduced = Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
         viz = Viz(reduced)
-        viz.spread = prefs.getFloat("spread", Viz.GSPREAD.toFloat()).toDouble()
-        viz.overlap = prefs.getFloat("overlap", Viz.GOVERLAP.toFloat()).toDouble().coerceIn(0.0, 0.5)
+        viz.gOpen = prefs.getFloat("open", Viz.GOPEN.toFloat()).toDouble().coerceIn(0.0, 1.0)
+        viz.gSlow = prefs.getFloat("slow", Viz.GSLOW.toFloat()).toDouble().coerceIn(0.1, 20.0)
+        viz.bloom = prefs.getFloat("bloom", Viz.GBLOOM.toFloat()).toDouble().coerceIn(0.02, 0.5)
+        viz.depth = prefs.getFloat("depth", Viz.GDEPTH.toFloat()).toDouble().coerceIn(PI / 18, PI)
         viz.gFast = prefs.getFloat("fast", Viz.GFAST.toFloat()).toDouble().coerceIn(0.0, 3.0)
         viz.gClose = prefs.getFloat("close", Viz.GCLOSE.toFloat()).toDouble().coerceIn(0.0, 1.0)
 
@@ -121,7 +123,9 @@ class MainActivity : Activity() {
 
         root.addView(buildDock(), FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(12) })
         feel = buildFeel()
-        root.addView(feel, FrameLayout.LayoutParams(dp(330), -2, Gravity.TOP or Gravity.END).apply { topMargin = dp(10); rightMargin = dp(12) })
+        // Scrolls when the panel is taller than the screen (six sliders plus meters).
+        val feelScroll = android.widget.ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(feel) }
+        root.addView(feelScroll, FrameLayout.LayoutParams(dp(330), -2, Gravity.TOP or Gravity.END).apply { topMargin = dp(10); rightMargin = dp(12); bottomMargin = dp(10) })
         feel.visibility = View.GONE
 
         setContentView(root)
@@ -219,12 +223,14 @@ class MainActivity : Activity() {
         // Times are in 0.005 s steps; 0 means instant.
         box.addView(slider("React", 3.0, 600, ::fmt, "React: how long each band's now is averaged over", { viz.gFast }) { viz.gFast = it })
         box.addView(slider("Linger", 1.0, 200, ::fmt, "Linger: how long an opening takes to fold back", { viz.gClose }) { viz.gClose = it })
-        box.addView(slider("Overlap", 0.5, 50, pct, "Overlap: how far each band reaches into each neighbouring band, as a share of its own width", { viz.overlap }) { viz.overlap = it })
-        box.addView(slider("Spread", 1.0, 100, pct, "Spread: how much each band also opens the dimensions listed next to it", { viz.spread }) { viz.spread = it })
+        box.addView(slider("Attack", 1.0, 200, ::fmt, "Attack: how fast a dimension opens", { viz.gOpen }) { viz.gOpen = it })
+        box.addView(slider("Memory", 20.0, 200, ::fmt, "Memory: how long a band's sense of normal lasts", { viz.gSlow }) { viz.gSlow = max(0.1, it) })
+        box.addView(slider("Bloom", 0.5, 50, pct, "Bloom: how much of the time each band aims to be open", { viz.bloom }) { viz.bloom = max(0.02, it) })
+        box.addView(slider("Depth", PI, 180, { t -> "${(t * 180 / PI).roundToInt()}°" }, "Depth: how far each fold swings when fully open", { viz.depth }) { viz.depth = max(PI / 18, it) })
         box.addView(MeterView(this, viz, cFg, cMuted, cAccent), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val reset = button("Reset") {
-            synchronized(viz) { viz.spread = Viz.GSPREAD; viz.overlap = Viz.GOVERLAP; viz.gFast = Viz.GFAST; viz.gClose = Viz.GCLOSE }
+            synchronized(viz) { viz.gOpen = Viz.GOPEN; viz.gSlow = Viz.GSLOW; viz.bloom = Viz.GBLOOM; viz.depth = Viz.GDEPTH; viz.gFast = Viz.GFAST; viz.gClose = Viz.GCLOSE }
             saveFeel()
             for ((bar, pos) in feelBars) bar.progress = pos()
         }
@@ -243,7 +249,7 @@ class MainActivity : Activity() {
         else -> "${t.roundToInt()}s"
     }
 
-    private fun saveFeel() { prefs.edit().putFloat("fast", viz.gFast.toFloat()).putFloat("close", viz.gClose.toFloat()).putFloat("spread", viz.spread.toFloat()).putFloat("overlap", viz.overlap.toFloat()).apply() }
+    private fun saveFeel() { prefs.edit().putFloat("fast", viz.gFast.toFloat()).putFloat("close", viz.gClose.toFloat()).putFloat("open", viz.gOpen.toFloat()).putFloat("slow", viz.gSlow.toFloat()).putFloat("bloom", viz.bloom.toFloat()).putFloat("depth", viz.depth.toFloat()).apply() }
     private fun openFeel() { feel.visibility = View.VISIBLE; glView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showUI() }
     private fun closeFeel() { feel.visibility = View.GONE; showUI() }
 

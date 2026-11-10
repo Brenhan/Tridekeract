@@ -14,8 +14,7 @@ import kotlin.math.sqrt
 
 /**
  * Everything the Pentadekeract (15-cube) does each frame, ported line for line from the web page:
- * 15 overlapping frequency bands each open one fold of the 15-cube, and a share (Spread) of
- * the folds listed next to theirs; the visible cube tumbles with the volume; hidden axes are projected away.
+ * 15 frequency bands each open one fold of the 15-cube; the visible cube tumbles with the volume; hidden axes are projected away.
  * All public state is guarded by `synchronized(this)` — touch input comes from the UI thread.
  */
 class Viz(private val reducedMotion: Boolean) {
@@ -33,8 +32,10 @@ class Viz(private val reducedMotion: Boolean) {
         const val DUTY = 0.14
         const val ADAPT = 0.6
         const val CAP = 0.027
-        const val GOVERLAP = 0.05
-        const val GSPREAD = 0.8
+        const val GOPEN = 0.13
+        const val GSLOW = 3.4
+        const val GBLOOM = 0.14
+        const val GDEPTH = 1.2
         const val GFAST = 0.005
         const val GCLOSE = 0.02
         val TWDEF = doubleArrayOf(0.21, 0.277, 0.394, 0.708, 1.175, 1.798, 2.692, 4.0, 6.675, 12.695, 35.753, 60.0, 60.0, 60.0, 60.0)
@@ -52,20 +53,20 @@ class Viz(private val reducedMotion: Boolean) {
     val planeV = IntArray(HB) { (it + it / (DIM - 3)) % 3 }
     val planeH = IntArray(HB) { 3 + (it % (DIM - 3)) }
 
-    // Timings: the two the Feel panel changes, plus the baked ones.
-    /** How much each band also opens the dimensions listed next to it (0..1). */
-    /** How much each band also opens the dimensions listed next to it (0..1). */
-    var spread = GSPREAD
-    /** How far each band reaches into each neighbouring band, as a share of its own width (0..0.5). */
-    var overlap = GOVERLAP
-        set(v) { field = v; bandsFor = -1 }
+    // The Feel panel's settings.
     /** React: how long each band's "now" is averaged over (0 = its live level). */
     var gFast = GFAST
     /** Linger: how long an opening takes to fold back (0 = instantly). */
     var gClose = GCLOSE
-    private val gSlow = 3.4
+    /** Attack: how long an opening takes to open (0 = instantly). */
+    var gOpen = GOPEN
+    /** Memory: how long a band's sense of "normal" lasts. */
+    var gSlow = GSLOW
+    /** Bloom: the share of the time each band aims to be open. */
+    var bloom = GBLOOM
+    /** Depth: how far each fold swings when fully open, in radians. */
+    var depth = GDEPTH
     private val gPeak = 0.36
-    private val gOpen = 0.13
 
     val sgn = DoubleArray(MAX) { 1.0 }
     val hOpen = DoubleArray(MAX)
@@ -116,9 +117,8 @@ class Viz(private val reducedMotion: Boolean) {
         var acc = 0.0
         for (a in 0 until n) {
             val lo = acc; val hi = acc + w[a] / tot; acc = hi
-            val pad = (hi - lo) * overlap
-            bands[a][0] = exp(l0 + max(0.0, lo - pad) * span)
-            bands[a][1] = exp(l0 + min(1.0, hi + pad) * span)
+            bands[a][0] = exp(l0 + lo * span)
+            bands[a][1] = exp(l0 + min(1.0, hi) * span)
         }
     }
 
@@ -157,7 +157,7 @@ class Viz(private val reducedMotion: Boolean) {
             bPeak[k] = max(max(change, bPeak[k] * exp(-dt / gPeak)), 0.012)
             level[k] = min(1.0, change / bPeak[k])
             bDuty[k] += ((if (level[k] > 0.3) 1.0 else 0.0) - bDuty[k]) * (1 - exp(-dt / TW[k]))
-            bThr[k] = max(0.0, min(0.6, bThr[k] + dt * ADAPT * (12 / max(TW[k], CAP)) * (bDuty[k] - DUTY)))
+            bThr[k] = max(0.0, min(0.6, bThr[k] + dt * ADAPT * (12 / max(TW[k], CAP)) * (bDuty[k] - bloom)))
         }
     }
 
@@ -181,9 +181,7 @@ class Viz(private val reducedMotion: Boolean) {
         val spin = if (live) SPIN_MAX * vol.pow(1.6) + whip else SPIN_IDLE
         for (a in 0 until 3) theta[a] += dt * 0.7 * PACE * spin * BASE[a]
         for (i in 0 until HB) {
-            // Spread: each band also opens the dimensions listed next to it (bands i-1 and i+1).
-            val nb = max(if (i > 0) level[i - 1] else 0.0, if (i < HB - 1) level[i + 1] else 0.0)
-            val tgt = if (live) max(level[i], spread * nb) else 0.0
+            val tgt = if (live) level[i] else 0.0
             if (openAmt[i] < 0.02 && tgt > 0.1) sgn[i] = -sgn[i]
             openAmt[i] += (tgt - openAmt[i]) * (1 - exp(-dt / (if (tgt > openAmt[i]) gOpen else gClose)))
             if (fingers == 0) manual[i] *= exp(-dt * 1.2)
@@ -209,9 +207,9 @@ class Viz(private val reducedMotion: Boolean) {
         val angs = DoubleArray(HB)
         for (i in 0 until HB) {
             val h = planeH[i]
-            val ang = openAmt[i] * OPEN_MAX * sgn[i] + manual[i]
+            val ang = openAmt[i] * depth * sgn[i] + manual[i]
             angs[i] = ang
-            val w = min(1.0, abs(ang) / OPEN_MAX)
+            val w = min(1.0, abs(ang) / depth)
             if (w > wk[h]) wk[h] = w
             if (w >= best[h]) { best[h] = w; domBand[h] = i }
         }

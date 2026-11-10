@@ -19,13 +19,12 @@ top, because every build is signed with the same key (`keys/debug.keystore`).
 
 ## Gestures
 One finger turns the cube; two fingers fold through hidden dimensions; pinch zooms; twist rolls; double-tap resets the view; long-press opens
-the Feel panel: React (0–3 s) and Linger (0–1 s), 0 = instant; Overlap (how far each band reaches
-into its neighbours, 0–50%, default 5%) and Spread (how much each band also opens the dimensions
-listed next to it).
+the Feel panel: React, Linger, Attack (how fast folds open), Memory (how long "normal" lasts),
+Bloom (how often each band opens) and Depth (how far folds swing), plus live meters.
 
 ## Code map
 - `Viz.kt` — the per-frame behavior, ported line for line from the web page (bands, self-adjusting
-  thresholds, band overlap, Spread, tumble, 15D projection).
+  thresholds, tumble, 15D projection).
 - `Analyser.kt` — a copy of the browser's AnalyserNode (4096-point FFT, Blackman window, smoothing
   0.55, −100…−30 dB → 0…255), so the web tuning carries over unchanged.
 - `Renderer.kt` — OpenGL ES 3 instanced edges, stereo views.
