@@ -20,7 +20,7 @@ top, because every build is signed with the same key (`keys/debug.keystore`).
 ## Gestures
 One finger turns the cube; two fingers fold through hidden dimensions; pinch zooms; twist rolls; double-tap resets the view; long-press opens
 the Feel panel: React, Linger, Attack (how fast folds open), Memory (how long "normal" lasts),
-Bloom (how often each band opens) and Depth (how far folds swing), plus live meters.
+Bloom (how often each band opens, up to 100%) and Depth (how far folds swing), plus live meters.
 
 ## Code map
 - `Viz.kt` — the per-frame behavior, ported line for line from the web page (bands, self-adjusting

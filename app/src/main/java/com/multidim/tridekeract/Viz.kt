@@ -157,7 +157,7 @@ class Viz(private val reducedMotion: Boolean) {
             bPeak[k] = max(max(change, bPeak[k] * exp(-dt / gPeak)), 0.012)
             level[k] = min(1.0, change / bPeak[k])
             bDuty[k] += ((if (level[k] > 0.3) 1.0 else 0.0) - bDuty[k]) * (1 - exp(-dt / TW[k]))
-            bThr[k] = max(0.0, min(0.6, bThr[k] + dt * ADAPT * (12 / max(TW[k], CAP)) * (bDuty[k] - bloom)))
+            bThr[k] = max(-0.5, min(0.6, bThr[k] + dt * ADAPT * (12 / max(TW[k], CAP)) * (bDuty[k] - bloom)))
         }
     }
 

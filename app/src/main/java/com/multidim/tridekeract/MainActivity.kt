@@ -76,7 +76,7 @@ class MainActivity : Activity() {
         viz = Viz(reduced)
         viz.gOpen = prefs.getFloat("open", Viz.GOPEN.toFloat()).toDouble().coerceIn(0.0, 1.0)
         viz.gSlow = prefs.getFloat("slow", Viz.GSLOW.toFloat()).toDouble().coerceIn(0.1, 20.0)
-        viz.bloom = prefs.getFloat("bloom", Viz.GBLOOM.toFloat()).toDouble().coerceIn(0.02, 0.5)
+        viz.bloom = prefs.getFloat("bloom", Viz.GBLOOM.toFloat()).toDouble().coerceIn(0.02, 1.0)
         viz.depth = prefs.getFloat("depth", Viz.GDEPTH.toFloat()).toDouble().coerceIn(PI / 18, PI)
         viz.gFast = prefs.getFloat("fast", Viz.GFAST.toFloat()).toDouble().coerceIn(0.0, 3.0)
         viz.gClose = prefs.getFloat("close", Viz.GCLOSE.toFloat()).toDouble().coerceIn(0.0, 1.0)
@@ -225,7 +225,7 @@ class MainActivity : Activity() {
         box.addView(slider("Linger", 1.0, 200, ::fmt, "Linger: how long an opening takes to fold back", { viz.gClose }) { viz.gClose = it })
         box.addView(slider("Attack", 1.0, 200, ::fmt, "Attack: how fast a dimension opens", { viz.gOpen }) { viz.gOpen = it })
         box.addView(slider("Memory", 20.0, 200, ::fmt, "Memory: how long a band's sense of normal lasts", { viz.gSlow }) { viz.gSlow = max(0.1, it) })
-        box.addView(slider("Bloom", 0.5, 50, pct, "Bloom: how much of the time each band aims to be open", { viz.bloom }) { viz.bloom = max(0.02, it) })
+        box.addView(slider("Bloom", 1.0, 100, pct, "Bloom: how much of the time each band aims to be open", { viz.bloom }) { viz.bloom = max(0.02, it) })
         box.addView(slider("Depth", PI, 180, { t -> "${(t * 180 / PI).roundToInt()}°" }, "Depth: how far each fold swings when fully open", { viz.depth }) { viz.depth = max(PI / 18, it) })
         box.addView(MeterView(this, viz, cFg, cMuted, cAccent), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
