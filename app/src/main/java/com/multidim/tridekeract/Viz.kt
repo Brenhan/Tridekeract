@@ -124,6 +124,10 @@ class Viz(private val reducedMotion: Boolean) {
 
     fun resetWarm() { warmT = 0.0 }
 
+    /** Share of the way to move toward a target this frame. A time of 0 means jump straight
+     *  there (and avoids 0/0, which would leave a band stuck forever). */
+    private fun ease(dt: Double, tau: Double) = if (tau > 1e-9) 1 - exp(-dt / tau) else 1.0
+
     /** Per-band chain (Now / Normal / change / peak memory / self-adjust), as on the page. */
     fun readBands(dt: Double, live: Boolean, an: Analyser, end: Long) {
         if (!live) {
@@ -149,8 +153,8 @@ class Viz(private val reducedMotion: Boolean) {
             var i = i0
             while (i < i1 && i < n) { s += an.bytes[i]; i++ }
             val v = s / ((i1 - i0) * 255.0)
-            bFast[k] += (v - bFast[k]) * (1 - exp(-dt / min(gFast, warmT + dt)))
-            bSlow[k] += (v - bSlow[k]) * (1 - exp(-dt / min(gSlow, warmT + dt)))
+            bFast[k] += (v - bFast[k]) * ease(dt, min(gFast, warmT + dt)); if (!bFast[k].isFinite()) bFast[k] = v
+            bSlow[k] += (v - bSlow[k]) * ease(dt, min(gSlow, warmT + dt)); if (!bSlow[k].isFinite()) bSlow[k] = v
             var change = max(0.0, bFast[k] - bSlow[k] * (1 + bThr[k]))
             val gate = max(0.0, min(1.0, (max(v, bSlow[k]) - FLOOR * 0.5) / (FLOOR * 0.5)))
             change *= gate
@@ -183,7 +187,7 @@ class Viz(private val reducedMotion: Boolean) {
         for (i in 0 until HB) {
             val tgt = if (live) level[i] else 0.0
             if (openAmt[i] < 0.02 && tgt > 0.1) sgn[i] = -sgn[i]
-            openAmt[i] += (tgt - openAmt[i]) * (1 - exp(-dt / (if (tgt > openAmt[i]) gOpen else gClose)))
+            openAmt[i] += (tgt - openAmt[i]) * ease(dt, if (tgt > openAmt[i]) gOpen else gClose); if (!openAmt[i].isFinite()) openAmt[i] = 0.0
             if (fingers == 0) manual[i] *= exp(-dt * 1.2)
         }
         if (fingers == 0) {

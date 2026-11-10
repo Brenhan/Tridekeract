@@ -154,7 +154,7 @@ precision mediump float;flat in vec4 vcol;out vec4 o;void main(){o=vec4(vcol.rgb
 
     override fun onDrawFrame(gl: GL10?) {
         val now = SystemClock.elapsedRealtimeNanos()
-        val dt = min(0.05, (now - last) / 1e9)
+        val dt = max(0.0, min(0.05, (now - last) / 1e9))
         last = now
         val pal = palette
         GLES30.glDisable(GLES30.GL_SCISSOR_TEST)
