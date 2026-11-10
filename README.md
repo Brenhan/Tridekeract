@@ -18,7 +18,7 @@ top, because every build is signed with the same key (`keys/debug.keystore`).
   phone allows it.
 
 ## Gestures
-One finger turns the cube; two fingers fold through hidden dimensions; pinch zooms; twist rolls; double-tap resets the view; long-press opens
+The cube turns a step on each beat of the kick drum (and tips every fourth beat). One finger turns the cube; two fingers fold through hidden dimensions; pinch zooms; twist rolls; double-tap resets the view; long-press opens
 the Feel panel: React, Linger, Attack (how fast folds open), Memory (how long "normal" lasts),
 Bloom (how often each band opens, up to 100%) and Depth (how far folds swing), plus live meters.
 
