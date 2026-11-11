@@ -35,6 +35,7 @@ class Viz(private val reducedMotion: Boolean) {
         const val GOPEN = 0.13
         const val GSLOW = 3.4
         const val GBLOOM = 0.14
+        const val GBLOOM_HI = 0.6
         const val GDEPTH = 1.2
         const val GFAST = 0.005
         const val GCLOSE = 0.02
@@ -64,6 +65,18 @@ class Viz(private val reducedMotion: Boolean) {
     var gSlow = GSLOW
     /** Bloom: the share of the time each band aims to be open. */
     var bloom = GBLOOM
+    /** Bloom high: the share used when the music is at its fullest; Bloom slides between the two. */
+    var bloomHi = GBLOOM_HI
+    /** The Bloom in effect right now (for the meters). */
+    var bloomNow = GBLOOM
+        private set
+    // How full the music is right now: loudness over the last ~4 s, placed between the quietest and
+    // loudest it has been lately (both forget slowly, over about a minute).
+    private var iE = 0.0
+    private var iHi = 0.0
+    private var iLo = 0.0
+    var intensity = 0.0
+        private set
     /** Depth: how far each fold swings when fully open, in radians. */
     var depth = GDEPTH
     private val gPeak = 0.36
@@ -122,7 +135,7 @@ class Viz(private val reducedMotion: Boolean) {
         }
     }
 
-    fun resetWarm() { warmT = 0.0 }
+    fun resetWarm() { warmT = 0.0; iE = 0.0; iHi = 0.0; iLo = 0.0; intensity = 0.0 }
 
     /** Share of the way to move toward a target this frame. A time of 0 means jump straight
      *  there (and avoids 0/0, which would leave a band stuck forever). */
@@ -143,6 +156,13 @@ class Viz(private val reducedMotion: Boolean) {
         vol += (vt - vol) * (if (vt > vol) 0.45 else 0.15)
         an.computeBytes()
         warmT += dt
+        // Intensity → Bloom: a smooth slide between Bloom (sparse) and Bloom high (fullest).
+        iE += (rms - iE) * ease(dt, min(4.0, warmT))
+        if (warmT <= dt * 1.5) { iHi = iE; iLo = iE }
+        iHi = max(iE, iHi + (iE - iHi) * ease(dt, 60.0))
+        iLo = min(iE, iLo + (iE - iLo) * ease(dt, 60.0))
+        intensity = if (iHi - iLo > 1e-4) ((iE - iLo) / (iHi - iLo)).coerceIn(0.0, 1.0) else 0.0
+        bloomNow = bloom + (bloomHi - bloom) * intensity
         val ny = an.sampleRate / 2.0
         val n = an.bytes.size
         if (bandsFor != an.sampleRate) { bandRanges(HB); bandsFor = an.sampleRate }
@@ -161,7 +181,7 @@ class Viz(private val reducedMotion: Boolean) {
             bPeak[k] = max(max(change, bPeak[k] * exp(-dt / gPeak)), 0.012)
             level[k] = min(1.0, change / bPeak[k])
             bDuty[k] += ((if (level[k] > 0.3) 1.0 else 0.0) - bDuty[k]) * (1 - exp(-dt / TW[k]))
-            bThr[k] = max(-0.5, min(0.6, bThr[k] + dt * ADAPT * (12 / max(TW[k], CAP)) * (bDuty[k] - bloom)))
+            bThr[k] = max(-0.5, min(0.6, bThr[k] + dt * ADAPT * (12 / max(TW[k], CAP)) * (bDuty[k] - bloomNow)))
         }
     }
 

@@ -17,6 +17,8 @@ class MeterView(ctx: Context, private val viz: Viz, private val fg: Int, private
     private val lv = DoubleArray(Viz.HB)
     private val op = DoubleArray(Viz.DIM)
     private var rms = 0.0
+    private var bloomNow = 0.0
+    private var inten = 0.0
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), (78 * density).toInt())
@@ -27,6 +29,8 @@ class MeterView(ctx: Context, private val viz: Viz, private val fg: Int, private
             for (i in 0 until Viz.HB) lv[i] = viz.level[i]
             for (k in 0 until Viz.DIM) op[k] = viz.hOpen[k]
             rms = viz.loudness
+            bloomNow = viz.bloomNow
+            inten = viz.intensity
         }
         val w = width.toFloat()
         val label = 44 * density
@@ -45,7 +49,7 @@ class MeterView(ctx: Context, private val viz: Viz, private val fg: Int, private
         }
         row(0f, "bands", Viz.HB, { lv[it] }, accent)
         row(rowH + 4 * density, "open", Viz.DIM - 3, { op[it + 3] }, fg)
-        c.drawText("loudness %.3f".format(rms), 0f, rowH * 2 + 20 * density, text)
+        c.drawText("loudness %.3f   fullness %d%%   bloom now %d%%".format(rms, (inten * 100).toInt(), (bloomNow * 100).toInt()), 0f, rowH * 2 + 20 * density, text)
         if (isShown) postInvalidateOnAnimation()
     }
 }
