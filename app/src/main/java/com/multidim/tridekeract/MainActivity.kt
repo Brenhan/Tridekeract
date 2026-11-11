@@ -74,14 +74,13 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val reduced = Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
         viz = Viz(reduced)
-        viz.gOpen = prefs.getFloat("open", Viz.GOPEN.toFloat()).toDouble().coerceIn(0.0, 1.0)
         viz.gSlow = prefs.getFloat("slow", Viz.GSLOW.toFloat()).toDouble().coerceIn(0.1, 20.0)
         viz.bloom = prefs.getFloat("bloom", Viz.GBLOOM.toFloat()).toDouble().coerceIn(0.02, 1.0)
         viz.bloomHi = prefs.getFloat("bloomHi", Viz.GBLOOM_HI.toFloat()).toDouble().coerceIn(0.02, 1.0)
         viz.adapt = prefs.getFloat("adapt", Viz.GADAPT.toFloat()).toDouble().coerceIn(0.1, 60.0)
         viz.depth = prefs.getFloat("depth", Viz.GDEPTH.toFloat()).toDouble().coerceIn(PI / 18, PI)
-        viz.gFast = prefs.getFloat("fast", Viz.GFAST.toFloat()).toDouble().coerceIn(0.0, 3.0)
-        viz.gClose = prefs.getFloat("close", Viz.GCLOSE.toFloat()).toDouble().coerceIn(0.0, 1.0)
+        viz.stepSize = prefs.getFloat("step", Viz.GSTEP.toFloat()).toDouble().coerceIn(0.01, 1.0)
+        viz.linger = prefs.getFloat("lingerBuild", Viz.GLINGER.toFloat()).toDouble().coerceIn(0.1, 20.0)
 
         engine = AudioEngine(this)
         engine.onFinished = { ui.post { engine.stopTrack(); setStatus("Finished: $trackName. Tap Play to hear it again."); refresh(); showUI() } }
@@ -223,18 +222,17 @@ class MainActivity : Activity() {
         }
         val pct = { t: Double -> "${(t * 100).roundToInt()}%" }
         // Times are in 0.005 s steps; 0 means instant.
-        box.addView(slider("React", 3.0, 600, ::fmt, "React: how long each band's now is averaged over", { viz.gFast }) { viz.gFast = it })
-        box.addView(slider("Linger", 1.0, 200, ::fmt, "Linger: how long an opening takes to fold back", { viz.gClose }) { viz.gClose = it })
-        box.addView(slider("Attack", 1.0, 200, ::fmt, "Attack: how fast a dimension opens", { viz.gOpen }) { viz.gOpen = it })
+        box.addView(slider("Step", 1.0, 100, pct, "Step: how much of a full opening each hit adds", { viz.stepSize }) { viz.stepSize = max(0.01, it) })
+        box.addView(slider("Linger", 20.0, 200, ::fmt, "Linger: how long a built-up opening takes to sink back", { viz.linger }) { viz.linger = max(0.1, it) })
         box.addView(slider("Memory", 20.0, 200, ::fmt, "Memory: how long a band's sense of normal lasts", { viz.gSlow }) { viz.gSlow = max(0.1, it) })
-        box.addView(slider("Bloom", 1.0, 100, pct, "Bloom: how much of the time each band aims to be open in the sparsest parts", { viz.bloom }) { viz.bloom = max(0.02, it) })
-        box.addView(slider("Bloom high", 1.0, 100, pct, "Bloom high: how much of the time each band aims to be open in the fullest parts", { viz.bloomHi }) { viz.bloomHi = max(0.02, it) })
-        box.addView(slider("Adapt", 60.0, 600, ::fmt, "Adapt: how long each band's open-share tally averages over, the same for every band", { viz.adapt }) { viz.adapt = max(0.1, it) })
+        box.addView(slider("Bloom", 1.0, 100, pct, "Bloom: how open each dimension aims to be on average in the sparsest parts", { viz.bloom }) { viz.bloom = max(0.02, it) })
+        box.addView(slider("Bloom high", 1.0, 100, pct, "Bloom high: how open each dimension aims to be on average in the fullest parts", { viz.bloomHi }) { viz.bloomHi = max(0.02, it) })
+        box.addView(slider("Adapt", 60.0, 600, ::fmt, "Adapt: how long each dimension's average openness is measured over", { viz.adapt }) { viz.adapt = max(0.1, it) })
         box.addView(slider("Depth", PI, 180, { t -> "${(t * 180 / PI).roundToInt()}°" }, "Depth: how far each fold swings when fully open", { viz.depth }) { viz.depth = max(PI / 18, it) })
         box.addView(MeterView(this, viz, cFg, cMuted, cAccent), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val reset = button("Reset") {
-            synchronized(viz) { viz.gOpen = Viz.GOPEN; viz.gSlow = Viz.GSLOW; viz.bloom = Viz.GBLOOM; viz.bloomHi = Viz.GBLOOM_HI; viz.adapt = Viz.GADAPT; viz.depth = Viz.GDEPTH; viz.gFast = Viz.GFAST; viz.gClose = Viz.GCLOSE }
+            synchronized(viz) { viz.stepSize = Viz.GSTEP; viz.linger = Viz.GLINGER; viz.gSlow = Viz.GSLOW; viz.bloom = Viz.GBLOOM; viz.bloomHi = Viz.GBLOOM_HI; viz.adapt = Viz.GADAPT; viz.depth = Viz.GDEPTH; }
             saveFeel()
             for ((bar, pos) in feelBars) bar.progress = pos()
         }
@@ -253,7 +251,7 @@ class MainActivity : Activity() {
         else -> "${t.roundToInt()}s"
     }
 
-    private fun saveFeel() { prefs.edit().putFloat("fast", viz.gFast.toFloat()).putFloat("close", viz.gClose.toFloat()).putFloat("open", viz.gOpen.toFloat()).putFloat("slow", viz.gSlow.toFloat()).putFloat("bloom", viz.bloom.toFloat()).putFloat("bloomHi", viz.bloomHi.toFloat()).putFloat("adapt", viz.adapt.toFloat()).putFloat("depth", viz.depth.toFloat()).apply() }
+    private fun saveFeel() { prefs.edit().putFloat("step", viz.stepSize.toFloat()).putFloat("lingerBuild", viz.linger.toFloat()).putFloat("slow", viz.gSlow.toFloat()).putFloat("bloom", viz.bloom.toFloat()).putFloat("bloomHi", viz.bloomHi.toFloat()).putFloat("adapt", viz.adapt.toFloat()).putFloat("depth", viz.depth.toFloat()).apply() }
     private fun openFeel() { feel.visibility = View.VISIBLE; glView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showUI() }
     private fun closeFeel() { feel.visibility = View.GONE; showUI() }
 

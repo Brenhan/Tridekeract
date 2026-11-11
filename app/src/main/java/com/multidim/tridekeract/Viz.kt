@@ -13,8 +13,11 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Everything the Pentadekeract (15-cube) does each frame, ported line for line from the web page:
- * 12 frequency bands each open one fold (4D–15D) of the 15-cube; the visible cube tumbles with the volume; hidden axes are projected away.
+ * Everything the Pentadekeract (15-cube) does each frame.
+ * 12 frequency bands each build up one fold (4D–15D) of the 15-cube: while a band is above its
+ * normal level its fold opens a step at a time, and it sinks back between hits. Each band tunes its
+ * own sensitivity so its fold is, on average, as open as Bloom asks. Folds that open push the cube
+ * around in 3D; hidden axes are projected away.
  * All public state is guarded by `synchronized(this)` — touch input comes from the UI thread.
  */
 class Viz(private val reducedMotion: Boolean) {
@@ -29,16 +32,16 @@ class Viz(private val reducedMotion: Boolean) {
         const val LO = 20.0
         const val HI = 14000.0
         const val LOW_WIDEN = 0.45
-        const val DUTY = 0.14
         const val ADAPT = 0.6
         const val CAP = 0.027
-        const val GOPEN = 0.13
+        const val SMOOTH = 0.06   // s: how quickly a fold glides to its built-up amount
+        const val HOLD_RATE = 2.0 // steps per second added while a sound holds above normal
         const val GSLOW = 3.4
         const val GBLOOM = 0.14
         const val GBLOOM_HI = 0.6
         const val GDEPTH = 1.2
-        const val GFAST = 0.005
-        const val GCLOSE = 0.02
+        const val GSTEP = 0.2
+        const val GLINGER = 3.0
         const val GADAPT = 2.0
         val BASE = doubleArrayOf(0.8, 0.5, 0.35)
     }
@@ -50,17 +53,15 @@ class Viz(private val reducedMotion: Boolean) {
     val planeH = IntArray(HB) { 3 + (it % (DIM - 3)) }
 
     // The Feel panel's settings.
-    /** React: how long each band's "now" is averaged over (0 = its live level). */
-    var gFast = GFAST
-    /** Linger: how long an opening takes to fold back (0 = instantly). */
-    var gClose = GCLOSE
-    /** Attack: how long an opening takes to open (0 = instantly). */
-    var gOpen = GOPEN
+    /** Step: how much of a full opening each hit adds. */
+    var stepSize = GSTEP
+    /** Linger: how long a built-up opening takes to sink back. */
+    var linger = GLINGER
     /** Memory: how long a band's sense of "normal" lasts. */
     var gSlow = GSLOW
-    /** Bloom: the share of the time each band aims to be open. */
+    /** Bloom: how open each dimension aims to be on average, in the sparsest parts. */
     var bloom = GBLOOM
-    /** Bloom high: the share used when the music is at its fullest; Bloom slides between the two. */
+    /** Bloom high: the same for the fullest parts; Bloom slides between the two. */
     var bloomHi = GBLOOM_HI
     /** The Bloom in effect right now (for the meters). */
     var bloomNow = GBLOOM
@@ -74,20 +75,20 @@ class Viz(private val reducedMotion: Boolean) {
         private set
     /** Depth: how far each fold swings when fully open, in radians. */
     var depth = GDEPTH
-    private val gPeak = 0.36
 
     val sgn = DoubleArray(MAX) { 1.0 }
     val hOpen = DoubleArray(MAX)
     val domBand = IntArray(MAX)
     val openAmt = DoubleArray(MAX)
     val manual = DoubleArray(MAX)
-    private val bFast = DoubleArray(MAX)
-    private val bSlow = DoubleArray(MAX)
-    private val bPeak = DoubleArray(MAX) { 0.02 }
-    private val bThr = DoubleArray(MAX) { 0.15 }
-    private val bDuty = DoubleArray(MAX) { 0.08 }
+    private val bSlow = DoubleArray(MAX)                   // each band's normal level
+    private val bThr = DoubleArray(MAX) { 0.15 }           // sensitivity margin above normal
+    private val built = DoubleArray(MAX)                   // how far each fold has built up (0..1)
+    private val avgOpen = DoubleArray(MAX)                 // its average over the Adapt time
+    private val above = BooleanArray(MAX)                  // band currently above its normal?
+    /** 1 while a band is above its normal, else 0 (for the meters). */
     val level = DoubleArray(MAX)
-    /** Adapt: one self-adjust window for every band — how long each band's open-share tally averages over. */
+    /** Adapt: how long each dimension's average openness is measured over (same for every band). */
     var adapt = GADAPT
 
     private var lastRms = 0.0
@@ -95,7 +96,7 @@ class Viz(private val reducedMotion: Boolean) {
     val loudness get() = lastRms
     // Turned by the unfolding: each fold that opens gives the cube a push (turning the way its split
     // goes), friction slows it again. Closing doesn't push back, so turns add up rather than rock.
-    private val PUSH_GAIN = if (reducedMotion) 0.24 else 0.8   // rad/s per full opening
+    private val PUSH_GAIN = if (reducedMotion) 0.6 else 2.0    // rad/s per full opening
     private val FRICTION = 1.2                                   // s for the spin to fade to ~37%
     private val OMEGA_MAX = if (reducedMotion) 0.6 else 2.0      // rad/s cap per axis
     val omega = DoubleArray(3)
@@ -140,10 +141,13 @@ class Viz(private val reducedMotion: Boolean) {
      *  there (and avoids 0/0, which would leave a band stuck forever). */
     private fun ease(dt: Double, tau: Double) = if (tau > 1e-9) 1 - exp(-dt / tau) else 1.0
 
-    /** Per-band chain (Now / Normal / change / peak memory / self-adjust), as on the page. */
+    /**
+     * Listen: for each band, is it above its normal right now? If so its fold builds up — a step when
+     * the hit starts, then slowly more while the sound holds — and it always sinks back over Linger.
+     */
     fun readBands(dt: Double, live: Boolean, an: Analyser, end: Long) {
         if (!live) {
-            for (a in 0 until MAX) level[a] *= 0.9
+            for (a in 0 until MAX) { level[a] = 0.0; above[a] = false; built[a] *= exp(-dt / max(linger, 0.05)) }
             vol *= 0.9
             return
         }
@@ -155,7 +159,7 @@ class Viz(private val reducedMotion: Boolean) {
         vol += (vt - vol) * (if (vt > vol) 0.45 else 0.15)
         an.computeBytes()
         warmT += dt
-        // Intensity → Bloom: a smooth slide between Bloom (sparse) and Bloom high (fullest).
+        // Fullness → Bloom: a smooth slide between Bloom (sparse) and Bloom high (fullest).
         iE += (rms - iE) * ease(dt, min(4.0, warmT))
         if (warmT <= dt * 1.5) { iHi = iE; iLo = iE }
         iHi = max(iE, iHi + (iE - iHi) * ease(dt, 60.0))
@@ -165,6 +169,7 @@ class Viz(private val reducedMotion: Boolean) {
         val ny = an.sampleRate / 2.0
         val n = an.bytes.size
         if (bandsFor != an.sampleRate) { bandRanges(HB); bandsFor = an.sampleRate }
+        val sink = exp(-dt / max(linger, 0.05))
         for (k in 0 until HB) {
             val i0 = floor(bands[k][0] / ny * n).toInt()
             val i1 = max(i0 + 1, ceil(bands[k][1] / ny * n).toInt())
@@ -172,15 +177,17 @@ class Viz(private val reducedMotion: Boolean) {
             var i = i0
             while (i < i1 && i < n) { s += an.bytes[i]; i++ }
             val v = s / ((i1 - i0) * 255.0)
-            bFast[k] += (v - bFast[k]) * ease(dt, min(gFast, warmT + dt)); if (!bFast[k].isFinite()) bFast[k] = v
             bSlow[k] += (v - bSlow[k]) * ease(dt, min(gSlow, warmT + dt)); if (!bSlow[k].isFinite()) bSlow[k] = v
-            var change = max(0.0, bFast[k] - bSlow[k] * (1 + bThr[k]))
-            val gate = max(0.0, min(1.0, (max(v, bSlow[k]) - FLOOR * 0.5) / (FLOOR * 0.5)))
-            change *= gate
-            bPeak[k] = max(max(change, bPeak[k] * exp(-dt / gPeak)), 0.012)
-            level[k] = min(1.0, change / bPeak[k])
-            bDuty[k] += ((if (level[k] > 0.3) 1.0 else 0.0) - bDuty[k]) * ease(dt, adapt)
-            bThr[k] = max(-0.5, min(0.6, bThr[k] + dt * ADAPT * (12 / max(adapt, CAP)) * (bDuty[k] - bloomNow)))
+            val audible = max(v, bSlow[k]) > FLOOR * 0.5
+            val isAbove = audible && v > bSlow[k] * (1 + bThr[k])
+            var b = built[k] * sink
+            if (isAbove) b += if (!above[k]) stepSize else stepSize * HOLD_RATE * dt
+            built[k] = if (b.isFinite()) min(1.0, b) else 0.0
+            above[k] = isAbove
+            level[k] = if (isAbove) 1.0 else 0.0
+            // Self-adjust: steer this band's sensitivity so its fold's average openness matches Bloom.
+            avgOpen[k] += (built[k] - avgOpen[k]) * ease(dt, adapt)
+            bThr[k] = max(-0.5, min(0.6, bThr[k] + dt * ADAPT * (12 / max(adapt, CAP)) * (avgOpen[k] - bloomNow)))
         }
     }
 
@@ -191,10 +198,10 @@ class Viz(private val reducedMotion: Boolean) {
     /** Everything after the analyser for one frame. */
     fun step(dt: Double, live: Boolean) {
         for (i in 0 until HB) {
-            val tgt = if (live) level[i] else 0.0
-            if (openAmt[i] < 0.02 && tgt > 0.1) sgn[i] = -sgn[i]
+            val tgt = built[i]
+            if (openAmt[i] < 0.02 && tgt > openAmt[i] + 0.05) sgn[i] = -sgn[i] // a fold reopening from shut goes the other way
             val before = openAmt[i]
-            openAmt[i] += (tgt - openAmt[i]) * ease(dt, if (tgt > openAmt[i]) gOpen else gClose); if (!openAmt[i].isFinite()) openAmt[i] = 0.0
+            openAmt[i] += (tgt - openAmt[i]) * ease(dt, SMOOTH); if (!openAmt[i].isFinite()) openAmt[i] = 0.0
             val opened = openAmt[i] - before
             if (opened > 0) omega[planeV[i]] += PUSH_GAIN * opened * pushSign[i]
             if (fingers == 0) manual[i] *= exp(-dt * 1.2)

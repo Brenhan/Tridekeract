@@ -6,7 +6,7 @@ import android.graphics.Paint
 import android.view.View
 
 /**
- * Live meters for the Feel panel. Top row: what each of the 15 bands hears (its level, 0–1).
+ * Live meters for the Feel panel. Top row: which of the 12 bands are above their normal right now.
  * Bottom row: how far each hidden dimension (4D–15D) is open. Plus the raw loudness, so it's
  * clear whether sound is arriving at all.
  */

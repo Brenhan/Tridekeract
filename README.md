@@ -19,8 +19,9 @@ top, because every build is signed with the same key (`keys/debug.keystore`).
 
 ## Gestures
 The cube is turned by its own unfolding: each fold that opens pushes it. One finger turns the cube; two fingers fold through hidden dimensions; pinch zooms; twist rolls; double-tap resets the view; long-press opens
-the Feel panel: React, Linger, Attack (how fast folds open), Memory (how long "normal" lasts),
-Adapt (one self-adjust time for every band), Bloom and Bloom high (how often each band opens in the sparsest and fullest parts; it slides between them with how full the music is) and Depth (how far folds swing), plus live meters.
+the Feel panel: Step (how much each hit adds), Linger (how long a built-up opening takes to sink
+back), Memory, Bloom and Bloom high (how open each dimension aims to be on average, sliding with
+how full the music is), Adapt and Depth, plus live meters.
 
 ## Code map
 - `Viz.kt` — the per-frame behavior, ported line for line from the web page (bands, self-adjusting
