@@ -43,12 +43,7 @@ class Viz(private val reducedMotion: Boolean) {
         val BASE = doubleArrayOf(0.8, 0.5, 0.35)
     }
 
-    private val SPIN_MAX = if (reducedMotion) 1.5 else 9.0
     private val SPIN_IDLE = if (reducedMotion) 0.3 else 0.6
-    private val WHIP_GAIN = if (reducedMotion) 0.0 else 26.0
-    private val WHIP_CAP = if (reducedMotion) 0.0 else 34.0
-    private val WHIP_DECAY = 2.4
-    private val WHIP_COOLDOWN = 2.5
 
     // Band i tilts visible axis planeV into its own hidden axis planeH (one band per foldable dimension).
     val planeV = IntArray(HB) { (it + it / (DIM - 3)) % 3 }
@@ -98,10 +93,13 @@ class Viz(private val reducedMotion: Boolean) {
     private var lastRms = 0.0
     /** Raw loudness of the latest analysis window (for the meters). */
     val loudness get() = lastRms
-    private var fastE = 0.0
-    private var slowE = 0.0
-    private var whip = 0.0
-    private var whipCool = 0.0
+    // Turned by the unfolding: each fold that opens gives the cube a push (turning the way its split
+    // goes), friction slows it again. Closing doesn't push back, so turns add up rather than rock.
+    private val PUSH_GAIN = if (reducedMotion) 0.24 else 0.8   // rad/s per full opening
+    private val FRICTION = 1.2                                   // s for the spin to fade to ~37%
+    private val OMEGA_MAX = if (reducedMotion) 0.6 else 2.0      // rad/s cap per axis
+    val omega = DoubleArray(3)
+    private val pushSign = DoubleArray(HB) { if ((it / 3) % 2 == 0) 1.0 else -1.0 }
     private var vol = 0.0
     private var volPeak = 0.02
     private var warmT = 99.0
@@ -192,24 +190,20 @@ class Viz(private val reducedMotion: Boolean) {
 
     /** Everything after the analyser for one frame. */
     fun step(dt: Double, live: Boolean) {
-        if (live) {
-            fastE += (lastRms - fastE) * (1 - exp(-dt / 0.12))
-            slowE += (lastRms - slowE) * (1 - exp(-dt / 4))
-            whipCool -= dt
-            val surge = fastE / (slowE + 0.004)
-            if (surge > 1.5 && whipCool <= 0 && fastE > 0.04) {
-                whip = min(WHIP_CAP, whip + WHIP_GAIN * min(1.0, (surge - 1.5) + 0.4))
-                whipCool = WHIP_COOLDOWN
-            }
-        } else { fastE *= 0.9; slowE *= 0.98 }
-        whip *= exp(-dt * WHIP_DECAY)
-        val spin = if (live) SPIN_MAX * vol.pow(1.6) + whip else SPIN_IDLE
-        for (a in 0 until 3) theta[a] += dt * 0.7 * PACE * spin * BASE[a]
         for (i in 0 until HB) {
             val tgt = if (live) level[i] else 0.0
             if (openAmt[i] < 0.02 && tgt > 0.1) sgn[i] = -sgn[i]
+            val before = openAmt[i]
             openAmt[i] += (tgt - openAmt[i]) * ease(dt, if (tgt > openAmt[i]) gOpen else gClose); if (!openAmt[i].isFinite()) openAmt[i] = 0.0
+            val opened = openAmt[i] - before
+            if (opened > 0) omega[planeV[i]] += PUSH_GAIN * opened * pushSign[i]
             if (fingers == 0) manual[i] *= exp(-dt * 1.2)
+        }
+        // Friction, speed cap, then turn. With nothing playing, a slow drift.
+        val fr = exp(-dt / FRICTION)
+        for (a in 0 until 3) {
+            omega[a] = (omega[a] * fr).coerceIn(-OMEGA_MAX, OMEGA_MAX)
+            theta[a] += dt * omega[a] + (if (live) 0.0 else dt * 0.7 * PACE * SPIN_IDLE * BASE[a])
         }
         if (fingers == 0) {
             val k = 60 * dt
