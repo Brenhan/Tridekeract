@@ -14,13 +14,13 @@ import kotlin.math.sqrt
 
 /**
  * Everything the Pentadekeract (15-cube) does each frame, ported line for line from the web page:
- * 15 frequency bands each open one fold of the 15-cube; the visible cube tumbles with the volume; hidden axes are projected away.
+ * 12 frequency bands each open one fold (4D–15D) of the 15-cube; the visible cube tumbles with the volume; hidden axes are projected away.
  * All public state is guarded by `synchronized(this)` — touch input comes from the UI thread.
  */
 class Viz(private val reducedMotion: Boolean) {
     companion object {
         const val MAX = 16
-        const val HB = 15
+        const val HB = 12
         const val DIM = 15
         const val OPEN_MAX = 1.2
         const val FLOOR = 0.035
@@ -50,7 +50,7 @@ class Viz(private val reducedMotion: Boolean) {
     private val WHIP_DECAY = 2.4
     private val WHIP_COOLDOWN = 2.5
 
-    // Band i tilts visible axis planeV into hidden axis planeH; bands 12–14 reuse hidden axes 3–5 with a different visible axis.
+    // Band i tilts visible axis planeV into its own hidden axis planeH (one band per foldable dimension).
     val planeV = IntArray(HB) { (it + it / (DIM - 3)) % 3 }
     val planeH = IntArray(HB) { 3 + (it % (DIM - 3)) }
 
