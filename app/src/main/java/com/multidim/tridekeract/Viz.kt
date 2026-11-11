@@ -1,6 +1,5 @@
 package com.multidim.tridekeract
 
-import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.cos
@@ -43,7 +42,12 @@ class Viz(private val reducedMotion: Boolean) {
         val BASE = doubleArrayOf(0.8, 0.5, 0.35)
     }
 
+    private val SPIN_MAX = if (reducedMotion) 1.5 else 9.0
     private val SPIN_IDLE = if (reducedMotion) 0.3 else 0.6
+    private val WHIP_GAIN = if (reducedMotion) 0.0 else 26.0
+    private val WHIP_CAP = if (reducedMotion) 0.0 else 34.0
+    private val WHIP_DECAY = 2.4
+    private val WHIP_COOLDOWN = 2.5
 
     // Band i tilts visible axis planeV into hidden axis planeH; bands 12–14 reuse hidden axes 3–5 with a different visible axis.
     val planeV = IntArray(HB) { (it + it / (DIM - 3)) % 3 }
@@ -80,16 +84,10 @@ class Viz(private val reducedMotion: Boolean) {
     private var lastRms = 0.0
     /** Raw loudness of the latest analysis window (for the meters). */
     val loudness get() = lastRms
-    // Beat → 3D turning: the cube steps a fixed turn on each kick and settles until the next.
-    private val TURN_STEP = if (reducedMotion) PI / 18 else PI / 6 // 10° / 30° per beat
-    private var kickPrev = 0.0
-    private var kickFlux = 0.0
-    private var fluxMean = 0.0
-    private var fluxDev = 0.0
-    private var beatCool = 0.0
-    var beats = 0
-        private set
-    private val turnTarget = DoubleArray(3)
+    private var fastE = 0.0
+    private var slowE = 0.0
+    private var whip = 0.0
+    private var whipCool = 0.0
     private var vol = 0.0
     private var volPeak = 0.02
     private var warmT = 99.0
@@ -147,14 +145,6 @@ class Viz(private val reducedMotion: Boolean) {
         warmT += dt
         val ny = an.sampleRate / 2.0
         val n = an.bytes.size
-        run {
-            val k1 = max(1, ceil(150.0 / ny * n).toInt())
-            var s = 0.0
-            for (i in 1..k1) s += an.bytes[i]
-            val kick = s / (k1 * 255.0)
-            kickFlux = max(0.0, kick - kickPrev)
-            kickPrev = kick
-        }
         if (bandsFor != an.sampleRate) { bandRanges(HB); bandsFor = an.sampleRate }
         for (k in 0 until HB) {
             val i0 = floor(bands[k][0] / ny * n).toInt()
@@ -182,23 +172,18 @@ class Viz(private val reducedMotion: Boolean) {
     /** Everything after the analyser for one frame. */
     fun step(dt: Double, live: Boolean) {
         if (live) {
-            // A beat: the kick range jumps well above its recent typical jump.
-            beatCool -= dt
-            val flux = kickFlux
-            val isBeat = warmT > 1.0 && beatCool <= 0 && flux > fluxMean + 1.5 * fluxDev + 0.004
-            fluxMean += (flux - fluxMean) * ease(dt, 1.5)
-            fluxDev += (abs(flux - fluxMean) - fluxDev) * ease(dt, 1.5)
-            if (isBeat) {
-                beats++
-                beatCool = 0.28
-                turnTarget[0] += TURN_STEP                       // turn on every beat
-                if (beats % 4 == 0) turnTarget[1] += TURN_STEP   // tip over every fourth beat
+            fastE += (lastRms - fastE) * (1 - exp(-dt / 0.12))
+            slowE += (lastRms - slowE) * (1 - exp(-dt / 4))
+            whipCool -= dt
+            val surge = fastE / (slowE + 0.004)
+            if (surge > 1.5 && whipCool <= 0 && fastE > 0.04) {
+                whip = min(WHIP_CAP, whip + WHIP_GAIN * min(1.0, (surge - 1.5) + 0.4))
+                whipCool = WHIP_COOLDOWN
             }
-        }
-        for (a in 0 until 3) {
-            theta[a] += (turnTarget[a] - theta[a]) * ease(dt, 0.09)  // settle onto the beat's step
-            turnTarget[a] += dt * 0.7 * PACE * SPIN_IDLE * BASE[a] * 0.5 // slow drift underneath
-        }
+        } else { fastE *= 0.9; slowE *= 0.98 }
+        whip *= exp(-dt * WHIP_DECAY)
+        val spin = if (live) SPIN_MAX * vol.pow(1.6) + whip else SPIN_IDLE
+        for (a in 0 until 3) theta[a] += dt * 0.7 * PACE * spin * BASE[a]
         for (i in 0 until HB) {
             val tgt = if (live) level[i] else 0.0
             if (openAmt[i] < 0.02 && tgt > 0.1) sgn[i] = -sgn[i]
