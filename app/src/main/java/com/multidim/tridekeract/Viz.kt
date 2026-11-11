@@ -39,7 +39,7 @@ class Viz(private val reducedMotion: Boolean) {
         const val GDEPTH = 1.2
         const val GFAST = 0.005
         const val GCLOSE = 0.02
-        val TWDEF = doubleArrayOf(0.21, 0.277, 0.394, 0.708, 1.175, 1.798, 2.692, 4.0, 6.675, 12.695, 35.753, 60.0, 60.0, 60.0, 60.0)
+        const val GADAPT = 2.0
         val BASE = doubleArrayOf(0.8, 0.5, 0.35)
     }
 
@@ -92,7 +92,8 @@ class Viz(private val reducedMotion: Boolean) {
     private val bThr = DoubleArray(MAX) { 0.15 }
     private val bDuty = DoubleArray(MAX) { 0.08 }
     val level = DoubleArray(MAX)
-    private val TW = DoubleArray(MAX) { if (it < TWDEF.size) TWDEF[it] else 12.0 }
+    /** Adapt: one self-adjust window for every band — how long each band's open-share tally averages over. */
+    var adapt = GADAPT
 
     private var lastRms = 0.0
     /** Raw loudness of the latest analysis window (for the meters). */
@@ -180,8 +181,8 @@ class Viz(private val reducedMotion: Boolean) {
             change *= gate
             bPeak[k] = max(max(change, bPeak[k] * exp(-dt / gPeak)), 0.012)
             level[k] = min(1.0, change / bPeak[k])
-            bDuty[k] += ((if (level[k] > 0.3) 1.0 else 0.0) - bDuty[k]) * (1 - exp(-dt / TW[k]))
-            bThr[k] = max(-0.5, min(0.6, bThr[k] + dt * ADAPT * (12 / max(TW[k], CAP)) * (bDuty[k] - bloomNow)))
+            bDuty[k] += ((if (level[k] > 0.3) 1.0 else 0.0) - bDuty[k]) * ease(dt, adapt)
+            bThr[k] = max(-0.5, min(0.6, bThr[k] + dt * ADAPT * (12 / max(adapt, CAP)) * (bDuty[k] - bloomNow)))
         }
     }
 
